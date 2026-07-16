@@ -23,7 +23,7 @@
 </head>
 <body>
 <div id="ar"></div>
-<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v4</span></div>
+<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v5</span></div>
 <div id="overlay">
   <h1>AR HOLO<span>CARD</span></h1>
   <p>Tap start, allow the camera, then point your phone at the card. The building rises out of it. Flip the card to see the 3D room layout.</p>
@@ -121,7 +121,7 @@ const mindar = new MindARThree({
   container: document.querySelector('#ar'),
   imageTargetSrc: './targets.mind',
   uiScanning: 'yes', uiLoading: 'yes',
-  filterMinCF: 1, filterBeta: 1000000,   // filter fully off: raw per-frame tracking, zero added lag
+  filterMinCF: 0.001, filterBeta: 1000,   // light smoothing: calms jitter, follows movement in real time
   missTolerance: 10, warmupTolerance: 2,
 });
 const { renderer, scene, camera } = mindar;
