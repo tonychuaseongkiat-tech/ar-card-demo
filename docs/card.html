@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR Holo Card — show on screen</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏙️</text></svg>">
+<style>
+  body { margin: 0; min-height: 100vh; background: #222; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px; font-family: Helvetica, Arial, sans-serif; }
+  img { max-width: 92vw; max-height: 75vh; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+  button { background: #4ecdc4; color: #0b132b; border: 0; font-size: 18px; font-weight: 700;
+    padding: 12px 32px; border-radius: 999px; }
+  p { color: #aaa; margin: 0; font-size: 14px; text-align: center; padding: 0 16px; }
+</style>
+</head>
+<body>
+  <img id="card" src="card-front.png" alt="card">
+  <button onclick="flip()">Flip card</button>
+  <p>Open this page on your computer, then point your phone (with the AR page running) at this screen.</p>
+  <script>
+    let front = true;
+    function flip() {
+      front = !front;
+      document.getElementById('card').src = front ? 'card-front.png' : 'card-back.png';
+    }
+  </script>
+</body>
+</html>

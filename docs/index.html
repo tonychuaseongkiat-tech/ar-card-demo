@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AR Holo Card</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏙️</text></svg>">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b132b; font-family: Helvetica, Arial, sans-serif; overflow: hidden; }
+  #ar { width: 100%; height: 100%; position: absolute; inset: 0; }
+  #overlay { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; background: #0b132b; color: #fff; text-align: center; padding: 24px; }
+  #overlay h1 { margin: 0; font-size: 30px; } #overlay h1 span { color: #4ecdc4; }
+  #overlay p { color: #90e0ef; max-width: 300px; line-height: 1.6; margin: 0; }
+  #startBtn { background: #4ecdc4; color: #0b132b; border: 0; font-size: 20px; font-weight: 700;
+    padding: 16px 44px; border-radius: 999px; }
+  #hint { position: absolute; bottom: 28px; left: 0; right: 0; z-index: 5; text-align: center;
+    color: #fff; font-size: 15px; text-shadow: 0 1px 4px #000; pointer-events: none; }
+  #cardLink { color: #ffd166; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="ar"></div>
+<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout</div>
+<div id="overlay">
+  <h1>AR HOLO<span>CARD</span></h1>
+  <p>Tap start, allow the camera, then point your phone at the card. The building rises out of it. Flip the card to see the 3D room layout.</p>
+  <button id="startBtn">Start AR</button>
+  <a id="cardLink" href="card.html">No card with you? Show the card on this screen</a>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./libs/three.module.min.js", "three/addons/": "./libs/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { MindARThree } from './libs/mindar-image-three.prod.js';
+
+const COLORS = { teal: 0x4ecdc4, red: 0xff6b6b, yellow: 0xffd166, purple: 0xa78bfa, orange: 0xf4a261, sky: 0x90e0ef, dark: 0x0b132b, navy: 0x3d5a80, cream: 0xfdf6ec };
+
+function tower(w, h, d, color) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  body.position.y = h / 2;
+  g.add(body);
+  const winMat = new THREE.MeshLambertMaterial({ color: COLORS.dark });
+  for (let y = 0.12; y < h - 0.1; y += 0.16) {
+    for (let x = -w / 2 + 0.08; x < w / 2 - 0.06; x += 0.13) {
+      for (const side of [1, -1]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.01), winMat);
+        win.position.set(x, y, side * (d / 2 + 0.005));
+        g.add(win);
+      }
+    }
+  }
+  return g;
+}
+
+function buildCity() {
+  const city = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.7),
+    new THREE.MeshLambertMaterial({ color: COLORS.navy }));
+  base.position.y = 0.02;
+  city.add(base);
+  const specs = [
+    [-0.4, 0.22, 0.55, 0.2, COLORS.teal], [-0.15, 0.2, 0.8, 0.2, COLORS.red],
+    [0.08, 0.16, 0.45, 0.18, COLORS.yellow], [0.3, 0.2, 1.0, 0.2, COLORS.purple],
+    [0.48, 0.13, 0.6, 0.16, COLORS.orange], [-0.28, 0.14, 0.35, 0.14, COLORS.sky],
+  ];
+  for (const [x, w, h, d, c] of specs) {
+    const t = tower(w, h, d, c);
+    t.position.set(x, 0.04, (Math.abs(x * 7919) % 0.2) - 0.1);
+    city.add(t);
+  }
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16),
+    new THREE.MeshBasicMaterial({ color: COLORS.yellow }));
+  sun.position.set(-0.35, 1.15, -0.15);
+  city.add(sun);
+  return city;
+}
+
+function wallSeg(x1, z1, x2, z2, h, mat) {
+  const len = Math.hypot(x2 - x1, z2 - z1);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(len, h, 0.025), mat);
+  m.position.set((x1 + x2) / 2, h / 2, (z1 + z2) / 2);
+  m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+  return m;
+}
+
+function furn(x, z, w, d, h, color) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
+  m.position.set(x, h / 2 + 0.015, z);
+  return m;
+}
+
+function buildRoom() {
+  // mirrors the blueprint on the card back: bedroom / living / kitchen / bath
+  const room = new THREE.Group();
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.8),
+    new THREE.MeshLambertMaterial({ color: COLORS.cream }));
+  floor.position.y = 0.015;
+  room.add(floor);
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x083d77, transparent: true, opacity: 0.85 });
+  const H = 0.22, X = 0.5, Z = 0.37;
+  const walls = [
+    [-X, -Z, X, -Z], [-X, Z, X, Z], [-X, -Z, -X, Z], [X, -Z, X, Z],   // outer
+    [-0.08, -Z, -0.08, 0.08], [-X, 0.08, 0.18, 0.08],                  // bedroom
+    [0.18, -0.06, 0.18, Z], [-0.08, -0.06, X, -0.06],                  // kitchen / living
+  ];
+  for (const [x1, z1, x2, z2] of walls) room.add(wallSeg(x1, z1, x2, z2, H, wallMat));
+  room.add(furn(-0.32, -0.2, 0.24, 0.14, 0.06, COLORS.navy));   // bed
+  room.add(furn(0.12, -0.22, 0.16, 0.16, 0.05, COLORS.teal));   // living table
+  room.add(furn(0.36, 0.1, 0.2, 0.1, 0.08, COLORS.red));        // kitchen counter
+  room.add(furn(-0.34, 0.24, 0.14, 0.14, 0.04, COLORS.sky));    // bath
+  return room;
+}
+
+const mindar = new MindARThree({
+  container: document.querySelector('#ar'),
+  imageTargetSrc: './targets.mind',
+  uiScanning: 'yes', uiLoading: 'yes',
+});
+const { renderer, scene, camera } = mindar;
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const dir = new THREE.DirectionalLight(0xffffff, 1.6);
+dir.position.set(0.5, 1, 1);
+scene.add(dir);
+
+const city = buildCity(), roomLayout = buildRoom();
+// card plane is XY in MindAR; rotate content so its "up" (Y) points out of the card (Z)
+city.rotation.x = Math.PI / 2;
+roomLayout.rotation.x = Math.PI / 2;
+
+const anchorFront = mindar.addAnchor(0);
+anchorFront.group.add(city);
+const anchorBack = mindar.addAnchor(1);
+anchorBack.group.add(roomLayout);
+
+// rise animation state
+let cityScale = 0, roomScale = 0;
+anchorFront.onTargetFound = () => { cityScale = 0.01; };
+anchorBack.onTargetFound = () => { roomScale = 0.01; };
+
+const clock = new THREE.Clock();
+document.querySelector('#startBtn').addEventListener('click', async () => {
+  document.querySelector('#overlay').style.display = 'none';
+  document.querySelector('#hint').hidden = false;
+  await mindar.start();
+  renderer.setAnimationLoop(() => {
+    const dt = clock.getDelta();
+    if (anchorFront.group.visible && cityScale < 1) cityScale = Math.min(1, cityScale + dt * 1.5);
+    if (anchorBack.group.visible && roomScale < 1) roomScale = Math.min(1, roomScale + dt * 1.5);
+    city.scale.set(cityScale, cityScale, cityScale);
+    roomLayout.scale.set(roomScale, roomScale, roomScale);
+    city.rotation.z = Math.sin(clock.elapsedTime * 0.6) * 0.08;
+    renderer.render(scene, camera);
+  });
+});
+</script>
+</body>
+</html>
