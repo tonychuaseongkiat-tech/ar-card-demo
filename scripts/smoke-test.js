@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-const SITE = path.join(__dirname, '..', 'site');
+const SITE = path.join(__dirname, '..', 'docs');
 const MIME = { '.js': 'text/javascript', '.html': 'text/html', '.png': 'image/png', '.mind': 'application/octet-stream' };
 
 (async () => {
