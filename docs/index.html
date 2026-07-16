@@ -23,7 +23,7 @@
 </head>
 <body>
 <div id="ar"></div>
-<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v5</span></div>
+<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v6</span></div>
 <div id="overlay">
   <h1>AR HOLO<span>CARD</span></h1>
   <p>Tap start, allow the camera, then point your phone at the card. The building rises out of it. Flip the card to see the 3D room layout.</p>
@@ -37,48 +37,25 @@
 <script type="module">
 import * as THREE from 'three';
 import { MindARThree } from './libs/mindar-image-three.prod.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const COLORS = { teal: 0x4ecdc4, red: 0xff6b6b, yellow: 0xffd166, purple: 0xa78bfa, orange: 0xf4a261, sky: 0x90e0ef, dark: 0x0b132b, navy: 0x3d5a80, cream: 0xfdf6ec };
 
-function tower(w, h, d, color) {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
-  body.position.y = h / 2;
-  g.add(body);
-  const winMat = new THREE.MeshLambertMaterial({ color: COLORS.dark });
-  for (let y = 0.12; y < h - 0.1; y += 0.16) {
-    for (let x = -w / 2 + 0.08; x < w / 2 - 0.06; x += 0.13) {
-      for (const side of [1, -1]) {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.01), winMat);
-        win.position.set(x, y, side * (d / 2 + 0.005));
-        g.add(win);
-      }
-    }
-  }
-  return g;
-}
-
+// Avenue Residences towers — real 3D scan (GLB) loaded async into this group
 function buildCity() {
-  const city = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.7),
-    new THREE.MeshLambertMaterial({ color: COLORS.navy }));
-  base.position.y = 0.02;
-  city.add(base);
-  const specs = [
-    [-0.4, 0.22, 0.55, 0.2, COLORS.teal], [-0.15, 0.2, 0.8, 0.2, COLORS.red],
-    [0.08, 0.16, 0.45, 0.18, COLORS.yellow], [0.3, 0.2, 1.0, 0.2, COLORS.purple],
-    [0.48, 0.13, 0.6, 0.16, COLORS.orange], [-0.28, 0.14, 0.35, 0.14, COLORS.sky],
-  ];
-  for (const [x, w, h, d, c] of specs) {
-    const t = tower(w, h, d, c);
-    t.position.set(x, 0.04, (Math.abs(x * 7919) % 0.2) - 0.1);
-    city.add(t);
-  }
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16),
-    new THREE.MeshBasicMaterial({ color: COLORS.yellow }));
-  sun.position.set(-0.35, 1.15, -0.15);
-  city.add(sun);
-  return city;
+  const holder = new THREE.Group();
+  new GLTFLoader().load('./building.glb', gltf => {
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const scale = 1.0 / Math.max(size.x, size.z);   // fit footprint to card width
+    model.scale.setScalar(scale);
+    box.setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.set(-center.x, -box.min.y, -center.z);  // sit on the card, centered
+    holder.add(model);
+  });
+  return holder;
 }
 
 function wallSeg(x1, z1, x2, z2, h, mat) {
@@ -95,25 +72,72 @@ function furn(x, z, w, d, h, color) {
   return m;
 }
 
+function makeLabel(text) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#083d77'; g.font = 'bold 34px Helvetica';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, 128, 32);
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.16, 0.04),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+  m.rotation.x = -Math.PI / 2;
+  return m;
+}
+
 function buildRoom() {
-  // mirrors the blueprint on the card back: bedroom / living / kitchen / bath
+  // Avenue Residences Type H (1001 sq ft): 3 bedrooms, 3 baths, balcony,
+  // living/dining, kitchen + yard. Coordinates in metres from the real
+  // floor plan (11.15m x 9.325m), scaled onto the card.
+  const S = 0.09, CX = 5.575, CZ = 4.6625;
   const room = new THREE.Group();
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.8),
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(11.15 * S + 0.04, 0.02, 9.325 * S + 0.04),
     new THREE.MeshLambertMaterial({ color: COLORS.cream }));
-  floor.position.y = 0.015;
+  floor.position.y = 0.01;
   room.add(floor);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x083d77, transparent: true, opacity: 0.85 });
-  const H = 0.22, X = 0.5, Z = 0.37;
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x083d77, transparent: true, opacity: 0.88 });
+  const H = 0.14;
   const walls = [
-    [-X, -Z, X, -Z], [-X, Z, X, Z], [-X, -Z, -X, Z], [X, -Z, X, Z],   // outer
-    [-0.08, -Z, -0.08, 0.08], [-X, 0.08, 0.18, 0.08],                  // bedroom
-    [0.18, -0.06, 0.18, Z], [-0.08, -0.06, X, -0.06],                  // kitchen / living
+    [0, 0, 11.15, 0], [0, 0, 0, 6.91], [11.15, 0, 11.15, 6.91],           // top, left, right
+    [0, 6.91, 1.9, 6.91], [1.9, 6.91, 1.9, 9.325],                        // yard step
+    [1.9, 9.325, 10.2, 9.325], [10.2, 9.325, 10.2, 6.91], [10.2, 6.91, 11.15, 6.91], // bottom
+    [4.53, 0, 4.53, 4.14], [0, 4.14, 4.53, 4.14],                         // bed2 | living, bed2/bed3
+    [2.96, 0.5, 2.96, 2.94], [2.96, 2.94, 4.53, 2.94],                    // bath 2
+    [2.61, 5.18, 2.61, 6.91], [2.61, 5.18, 4.53, 5.18],                   // bath 3
+    [7.84, 0, 7.84, 6.91],                                                 // bed1 | living
+    [8.89, 4.32, 11.15, 4.32], [8.89, 4.32, 8.89, 6.56], [8.89, 6.56, 11.15, 6.56], // bath 1
+    [0, 6.91, 6.62, 6.91], [7.84, 6.91, 11.15, 6.91],                     // kitchen wall (gap = entrance)
+    [3.31, 6.91, 3.31, 9.325],                                             // yard | kitchen
+    [6.62, 6.91, 6.62, 9.325],                                             // kitchen | entrance
+    [4.53, 1.04, 7.84, 1.04],                                              // balcony line
   ];
-  for (const [x1, z1, x2, z2] of walls) room.add(wallSeg(x1, z1, x2, z2, H, wallMat));
-  room.add(furn(-0.32, -0.2, 0.24, 0.14, 0.06, COLORS.navy));   // bed
-  room.add(furn(0.12, -0.22, 0.16, 0.16, 0.05, COLORS.teal));   // living table
-  room.add(furn(0.36, 0.1, 0.2, 0.1, 0.08, COLORS.red));        // kitchen counter
-  room.add(furn(-0.34, 0.24, 0.14, 0.14, 0.04, COLORS.sky));    // bath
+  for (const [x1, z1, x2, z2] of walls)
+    room.add(wallSeg((x1 - CX) * S, (z1 - CZ) * S, (x2 - CX) * S, (z2 - CZ) * S, H, wallMat));
+  const items = [ // x, z, w(m), d(m), h, color
+    [9.3, 2.2, 2.2, 1.7, 0.05, COLORS.navy],    // bed 1
+    [1.7, 1.9, 1.9, 1.5, 0.05, COLORS.navy],    // bed 2
+    [1.2, 5.9, 1.7, 1.4, 0.05, COLORS.navy],    // bed 3
+    [5.4, 2.0, 1.9, 0.9, 0.05, COLORS.teal],    // sofa in living
+    [6.1, 5.1, 1.3, 1.3, 0.05, COLORS.orange],  // dining table
+    [5.0, 8.9, 2.6, 0.6, 0.07, COLORS.red],     // kitchen counter
+    [2.6, 8.6, 0.9, 0.9, 0.07, COLORS.sky],     // yard washer
+    [3.7, 1.0, 0.7, 0.7, 0.04, COLORS.sky],     // bath 2 fixture
+    [3.4, 6.2, 0.7, 0.7, 0.04, COLORS.sky],     // bath 3 fixture
+    [10.0, 5.5, 0.7, 0.7, 0.04, COLORS.sky],    // bath 1 fixture
+  ];
+  for (const [x, z, w, d, h, c] of items)
+    room.add(furn((x - CX) * S, (z - CZ) * S, w * S, d * S, h, c));
+  const labels = [
+    ['LIVING', 6.2, 3.2], ['DINING', 6.2, 5.9], ['KITCHEN', 5.0, 7.9],
+    ['BED 1', 9.4, 1.2], ['BED 2', 1.7, 0.9], ['BED 3', 1.2, 4.9],
+    ['BALCONY', 6.2, 0.5], ['YARD', 2.6, 7.6], ['ENTR', 7.2, 8.2],
+  ];
+  for (const [t, x, z] of labels) {
+    const l = makeLabel(t);
+    l.position.set((x - CX) * S, 0.025, (z - CZ) * S);
+    room.add(l);
+  }
   return room;
 }
 
