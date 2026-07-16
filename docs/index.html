@@ -121,7 +121,7 @@ const mindar = new MindARThree({
   container: document.querySelector('#ar'),
   imageTargetSrc: './targets.mind',
   uiScanning: 'yes', uiLoading: 'yes',
-  filterMinCF: 0.0001, filterBeta: 100,   // smooth when still, responsive when moving
+  filterMinCF: 0.01, filterBeta: 10000,   // minimal smoothing: model stays locked to the card in real time
   missTolerance: 10, warmupTolerance: 2,
 });
 const { renderer, scene, camera } = mindar;
