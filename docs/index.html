@@ -23,7 +23,7 @@
 </head>
 <body>
 <div id="ar"></div>
-<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v6</span></div>
+<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v7</span></div>
 <div id="overlay">
   <h1>AR HOLO<span>CARD</span></h1>
   <p>Tap start, allow the camera, then point your phone at the card. The building rises out of it. Flip the card to see the 3D room layout.</p>
@@ -37,25 +37,89 @@
 <script type="module">
 import * as THREE from 'three';
 import { MindARThree } from './libs/mindar-image-three.prod.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const COLORS = { teal: 0x4ecdc4, red: 0xff6b6b, yellow: 0xffd166, purple: 0xa78bfa, orange: 0xf4a261, sky: 0x90e0ef, dark: 0x0b132b, navy: 0x3d5a80, cream: 0xfdf6ec };
 
-// Avenue Residences towers — real 3D scan (GLB) loaded async into this group
+// Avenue Residences — clean stylized model of the 4 white towers on their podium
+const MAT = {
+  white: new THREE.MeshLambertMaterial({ color: 0xf2f3f5 }),
+  glass: new THREE.MeshLambertMaterial({ color: 0x1d2733 }),
+  roof:  new THREE.MeshLambertMaterial({ color: 0x2a333f }),
+  lit:   new THREE.MeshBasicMaterial({ color: 0xffd899 }),
+  green: new THREE.MeshLambertMaterial({ color: 0x3e7c4f }),
+  pool:  new THREE.MeshBasicMaterial({ color: 0x54c6d6 }),
+};
+let seed = 7;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+function tower(w, h, d) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MAT.white);
+  body.position.y = h / 2;
+  g.add(body);
+  // dark vertical glazing strips on the two long faces, with sparse lit windows
+  const strips = 4, sw = w / (strips * 2);
+  for (let i = 0; i < strips; i++) {
+    const x = -w / 2 + sw * (1.5 + i * 2);
+    for (const side of [1, -1]) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(sw * 0.62, h * 0.94, 0.006), MAT.glass);
+      strip.position.set(x, h / 2, side * (d / 2 + 0.003));
+      g.add(strip);
+      for (let y = h * 0.06; y < h * 0.94; y += h / 24) {
+        if (rnd() < 0.35) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(sw * 0.7, h / 60, 0.004), MAT.lit);
+          win.position.set(x, y, side * (d / 2 + 0.007));
+          g.add(win);
+        }
+      }
+    }
+  }
+  // side fins + roof cap with white parapet
+  for (const sx of [1, -1]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.01, h, d * 0.7), MAT.glass);
+    fin.position.set(sx * (w / 2 + 0.005), h / 2, 0);
+    g.add(fin);
+  }
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, h * 0.02, d * 1.06), MAT.roof);
+  cap.position.y = h + h * 0.01;
+  g.add(cap);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(w * 0.5, h * 0.03, d * 0.5), MAT.white);
+  crown.position.y = h + h * 0.035;
+  g.add(crown);
+  return g;
+}
+
 function buildCity() {
-  const holder = new THREE.Group();
-  new GLTFLoader().load('./building.glb', gltf => {
-    const model = gltf.scene;
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const scale = 1.0 / Math.max(size.x, size.z);   // fit footprint to card width
-    model.scale.setScalar(scale);
-    box.setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    model.position.set(-center.x, -box.min.y, -center.z);  // sit on the card, centered
-    holder.add(model);
-  });
-  return holder;
+  const g = new THREE.Group();
+  // podium: 4-storey striped block with rooftop garden + pool
+  const pw = 0.95, pd = 0.42, ph = 0.09;
+  for (let i = 0; i < 4; i++) {
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(pw, ph / 8, pd), MAT.white);
+    slab.position.y = (i + 0.75) * (ph / 4);
+    g.add(slab);
+    const dark = new THREE.Mesh(new THREE.BoxGeometry(pw * 0.99, ph / 8, pd * 0.99), MAT.glass);
+    dark.position.y = (i + 0.25) * (ph / 4);
+    g.add(dark);
+  }
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.008, pd), MAT.green);
+  deck.position.y = ph + 0.004;
+  g.add(deck);
+  const pool = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.006, 0.12), MAT.pool);
+  pool.position.set(-0.05, ph + 0.011, 0.02);
+  g.add(pool);
+  // four towers in a staggered row like the render
+  const specs = [ // x, z, w, d, h
+    [-0.35, -0.06, 0.17, 0.15, 0.62],
+    [-0.12,  0.05, 0.17, 0.15, 0.60],
+    [ 0.12, -0.05, 0.17, 0.15, 0.62],
+    [ 0.35,  0.06, 0.17, 0.15, 0.58],
+  ];
+  for (const [x, z, w, d, h] of specs) {
+    const t = tower(w, h, d);
+    t.position.set(x, ph, z);
+    g.add(t);
+  }
+  return g;
 }
 
 function wallSeg(x1, z1, x2, z2, h, mat) {
