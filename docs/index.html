@@ -23,11 +23,13 @@
 </head>
 <body>
 <div id="ar"></div>
-<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v7</span></div>
+<div id="hint" hidden>Point your camera at the card &middot; flip it for the room layout <span style="opacity:.55">&middot; v8</span></div>
 <div id="overlay">
   <h1>AR HOLO<span>CARD</span></h1>
   <p>Tap start, allow the camera, then point your phone at the card. The building rises out of it. Flip the card to see the 3D room layout.</p>
-  <button id="startBtn">Start AR</button>
+  <button id="startBtn">Start AR (card mode)</button>
+  <a id="quickBtn" href="./building.usdz" rel="ar" style="background:#ffd166;color:#0b132b;text-decoration:none;font-size:18px;font-weight:700;padding:14px 36px;border-radius:999px">Ultra-stable AR (place on table)</a>
+  <p style="font-size:13px;color:#7f93b8;max-width:300px">Card mode sticks the model to the card. Ultra-stable mode uses your phone's built-in AR viewer — perfectly steady, placed on any surface.</p>
   <a id="cardLink" href="card.html">No card with you? Show the card on this screen</a>
 </div>
 
@@ -232,6 +234,17 @@ anchorBack.group.add(roomLayout);
 let cityScale = 0, roomScale = 0;
 anchorFront.onTargetFound = () => { cityScale = 0.01; };
 anchorBack.onTargetFound = () => { roomScale = 0.01; };
+
+// Ultra-stable mode: iOS Safari opens .usdz in AR Quick Look natively;
+// Android gets Google Scene Viewer with the GLB.
+const quickBtn = document.querySelector('#quickBtn');
+if (/android/i.test(navigator.userAgent)) {
+  const glbUrl = new URL('./building.glb', location.href).href;
+  quickBtn.removeAttribute('rel');
+  quickBtn.href = 'intent://arvr.google.com/scene-viewer/1.0?file=' + encodeURIComponent(glbUrl) +
+    '&mode=ar_preferred#Intent;scheme=https;package=com.google.android.googlequicksearchbox;' +
+    'action=android.intent.action.VIEW;S.browser_fallback_url=' + encodeURIComponent(glbUrl) + ';end;';
+}
 
 const clock = new THREE.Clock();
 document.querySelector('#startBtn').addEventListener('click', async () => {
